@@ -4,16 +4,20 @@ const API_BASE_URL = 'https://troikabackend.onrender.com';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true,
+  withCredentials: false, // usually false for token-based auth
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 second timeout
+  timeout: 10000,
 });
 
-// Request interceptor for debugging
+// 🔐 Request Interceptor – Automatically attach token
 api.interceptors.request.use(
   (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
     console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
     return config;
   },
@@ -23,7 +27,7 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// 🛑 Response Interceptor – Error handling
 api.interceptors.response.use(
   (response) => {
     console.log(`✅ API Response: ${response.status} ${response.config.url}`);
@@ -31,23 +35,22 @@ api.interceptors.response.use(
   },
   (error) => {
     console.error('❌ API Response Error:', error);
-    
-    // Handle specific error types
+
     if (error.code === 'ERR_NETWORK') {
-      console.error('🚫 CORS/Network Error - Check backend server and CORS configuration');
+      console.error('🚫 CORS/Network Error');
     } else if (error.response?.status === 401) {
       console.error('🔐 Authentication Error - Token may be invalid');
     } else if (error.response?.status === 403) {
-      console.error('🚫 Authorization Error - Insufficient permissions');
+      console.error('🚫 Authorization Error');
     } else if (error.response?.status === 404) {
-      console.error('🔍 Not Found Error - Endpoint does not exist');
+      console.error('🔍 Not Found Error');
     }
-    
+
     return Promise.reject(error);
   }
 );
 
-// Auth API
+// === Auth API ===
 export const authAPI = {
   login: (credentials) => {
     console.log('🔑 Attempting login...');
@@ -55,6 +58,7 @@ export const authAPI = {
   },
   logout: () => {
     console.log('👋 Logging out...');
+    localStorage.removeItem('token');
     return api.get('/logout');
   },
   register: (userData) => {
@@ -63,58 +67,26 @@ export const authAPI = {
   },
 };
 
-// Admin API - Updated with better error handling
+// === Admin API ===
 export const adminAPI = {
-  getDashboard: () => {
-    console.log('📊 Fetching admin dashboard...');
-    return api.get('/admin');
-  },
-  getProjects: () => {
-    console.log('📁 Fetching admin projects...');
-    return api.get('/admin/projects');
-  },
-  createProject: (projectData) => {
-    console.log('➕ Creating new project...');
-    return api.post('/admin/projects', projectData);
-  },
-  updateProject: (projectId, projectData) => {
-    console.log(`✏️ Updating project ${projectId}...`);
-    return api.put(`/admin/projects/${projectId}`, projectData);
-  },
-  deleteProject: (projectId) => {
-    console.log(`🗑️ Deleting project ${projectId}...`);
-    return api.delete(`/admin/projects/${projectId}`);
-  },
-  getUsers: () => {
-    console.log('👥 Fetching admin users...');
-    return api.get('/admin/users');
-  },
-  deleteUser: (userId) => {
-    console.log(`🗑️ Deleting user ${userId}...`);
-    return api.delete(`/admin/users/${userId}`);
-  },
-  // Add logout method for admin
-  logout: () => {
-    console.log('👋 Admin logging out...');
-    return api.get('/logout');
-  },
+  getDashboard: () => api.get('/admin'),
+  getProjects: () => api.get('/admin/projects'),
+  createProject: (data) => api.post('/admin/projects', data),
+  updateProject: (id, data) => api.put(`/admin/projects/${id}`, data),
+  deleteProject: (id) => api.delete(`/admin/projects/${id}`),
+  getUsers: () => api.get('/admin/users'),
+  deleteUser: (id) => api.delete(`/admin/users/${id}`),
+  logout: () => api.get('/logout'),
 };
 
-// User API
+// === User API ===
 export const userAPI = {
-  getDashboard: () => {
-    console.log('🏠 Fetching user dashboard...');
-    return api.get('/user/dashboard');
-  },
-  getProject: (projectId) => {
-    console.log(`📁 Fetching project ${projectId}...`);
-    return api.get(`/user/project/${projectId}`);
-  },
-  uploadPDF: (projectId, file) => {
-    console.log(`📄 Uploading PDF to project ${projectId}...`);
+  getDashboard: () => api.get('/user/dashboard'),
+  getProject: (id) => api.get(`/user/project/${id}`),
+  uploadPDF: (id, file) => {
     const formData = new FormData();
     formData.append('pdf', file);
-    return api.post(`/user/project/${projectId}/upload`, formData, {
+    return api.post(`/user/project/${id}/upload`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -122,52 +94,37 @@ export const userAPI = {
   },
 };
 
-// Chat API
+// === Chat API ===
 export const chatAPI = {
-  sendMessage: (projectId, message) => {
-    console.log(`💬 Sending message to project ${projectId}...`);
-    return api.post(`/user/chat/${projectId}/message`, { message });
-  },
-  getChatHistory: (projectId) => {
-    console.log(`📜 Fetching chat history for project ${projectId}...`);
-    return api.get(`/user/chat/${projectId}/history`);
-  },
+  sendMessage: (projectId, message) => api.post(`/user/chat/${projectId}/message`, { message }),
+  getChatHistory: (projectId) => api.get(`/user/chat/${projectId}/history`),
 };
 
-// Health check API
+// === Health Check ===
 export const healthAPI = {
-  check: () => {
-    console.log('🏥 Checking server health...');
-    return api.get('/health');
-  },
-  corsTest: () => {
-    console.log('🌐 Testing CORS...');
-    return api.get('/cors-test');
-  },
+  check: () => api.get('/health'),
+  corsTest: () => api.get('/cors-test'),
 };
 
-// Helper function to test API connectivity
+// === Test Tools ===
 export const testConnection = async () => {
   try {
-    console.log('🔍 Testing API connection...');
-    const response = await healthAPI.check();
-    console.log('✅ API connection successful:', response.data);
+    const res = await healthAPI.check();
+    console.log('✅ API is live:', res.data);
     return true;
-  } catch (error) {
-    console.error('❌ API connection failed:', error);
+  } catch (err) {
+    console.error('❌ API is not reachable:', err);
     return false;
   }
 };
 
-// Helper function to test CORS
 export const testCORS = async () => {
   try {
-    console.log('🌐 Testing CORS configuration...');
-    const response = await healthAPI.corsTest();
-    console.log('✅ CORS test successful:', response.data);
+    const res = await healthAPI.corsTest();
+    console.log('✅ CORS passed:', res.data);
     return true;
-  } catch (error) {
-    console.error('❌ CORS test failed:', error);
+  } catch (err) {
+    console.error('❌ CORS failed:', err);
     return false;
   }
 };

@@ -55,7 +55,7 @@ const ChatInterface = ({ projectId }) => {
     try {
       console.log('Sending message:', message, 'to project:', projectId);
       
-      const response = await fetch(`http://localhost:8080/user/chat/${projectId}/message`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/user/chat/${projectId}/message`, {
         method: 'POST',
         credentials: 'include',
         headers: {

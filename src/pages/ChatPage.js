@@ -39,7 +39,7 @@ const ChatPage = () => {
       // Use appropriate API based on user role
       const apiCall = isAdmin ? adminAPI.getProject : userAPI.getProject;
       
-      const response = await fetch(`http://localhost:8080/api/project/${projectId}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/project/${projectId}`, {
         method: 'GET',
         credentials: 'include',
         headers: {

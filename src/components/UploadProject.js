@@ -153,7 +153,7 @@ const UploadProject = ({ onProjectCreated }) => {
       console.log('Creating project with data:', projectData);
 
       // Create project first
-      const response = await fetch('http://localhost:8080/api/admin/projects', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/projects`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -199,7 +199,7 @@ const UploadProject = ({ onProjectCreated }) => {
         const formData = new FormData();
         formData.append('pdfs', fileObj.file);
 
-        await fetch(`http://localhost:8080/admin/projects/${projectId}/upload-pdf`, {
+        await fetch(`${process.env.REACT_APP_API_URL}/admin/projects/${projectId}/upload-pdf`, {
           method: 'POST',
           credentials: 'include',
           headers: {

@@ -51,7 +51,7 @@ const loadDashboardData = async () => {
     try {
         console.log('Loading dashboard data...');
         
-        const projectsResponse = await fetch('http://localhost:8080/api/admin/projects', {
+        const projectsResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/projects`, {
             method: 'GET',
             credentials: 'include',
             headers: {
@@ -87,7 +87,7 @@ const loadDashboardData = async () => {
         setProjects(projectsArray);
 
         // Also update dashboard stats
-        const dashboardResponse = await fetch('http://localhost:8080/api/admin/dashboard', {
+        const dashboardResponse = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/dashboard`, {
             method: 'GET',
             credentials: 'include',
             headers: {
@@ -129,7 +129,7 @@ const handleProjectCreated = async (newProject) => {
 
   const loadNotifications = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/admin/notifications', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/notifications`, {
         credentials: 'include',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -147,7 +147,7 @@ const handleProjectCreated = async (newProject) => {
 
   const checkSystemHealth = async () => {
     try {
-      const response = await fetch('http://localhost:8080/health');
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/health`);
       const data = await response.json();
       setSystemHealth(data);
     } catch (error) {
@@ -159,7 +159,7 @@ const handleProjectCreated = async (newProject) => {
   const startRealtimeUpdates = () => {
     return setInterval(async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/admin/realtime-stats', {
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/realtime-stats`, {
           credentials: 'include',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -182,7 +182,7 @@ const handleProjectCreated = async (newProject) => {
     if (!window.confirm('Are you sure you want to delete this project?')) return;
 
     try {
-      const response = await fetch(`http://localhost:8080/api/project/${projectId}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/project/${projectId}`, {
         method: 'DELETE',
         credentials: 'include',
         headers: {
@@ -209,7 +209,7 @@ const handleProjectCreated = async (newProject) => {
     if (!window.confirm('Are you sure you want to delete this user?')) return;
 
     try {
-      const response = await fetch(`http://localhost:8080/api/admin/users/${userId}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/users/${userId}`, {
         method: 'DELETE',
         credentials: 'include',
         headers: {
@@ -234,7 +234,7 @@ const handleProjectCreated = async (newProject) => {
 
   const loadChatHistory = async (projectId) => {
     try {
-      const response = await fetch(`http://localhost:8080/chat/${projectId}/history`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/chat/${projectId}/history`, {
         credentials: 'include',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -258,7 +258,7 @@ const handleProjectCreated = async (newProject) => {
     formData.append('pdf', file);
 
     try {
-      const response = await fetch(`http://localhost:8080/admin/projects/${projectId}/upload-pdf`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/projects/${projectId}/upload-pdf`, {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -294,7 +294,7 @@ const handleProjectCreated = async (newProject) => {
   };
 
   const copyEmbedCode = (projectId) => {
-    const embedCode = `<iframe src="http://localhost:8080/embed/${projectId}" width="400" height="600" frameborder="0"></iframe>`;
+    const embedCode = `<iframe src="${process.env.REACT_APP_API_URL}/embed/${projectId}" width="400" height="600" frameborder="0"></iframe>`;
     navigator.clipboard.writeText(embedCode);
     addNotification({
       type: 'success',
@@ -1134,7 +1134,7 @@ const EmbeddingPanel = ({ projects, onCopyEmbed }) => (
             <h4>{project.name}</h4>
             <div className="embed-code">
               <code>
-                {`<iframe src="http://localhost:8080/embed/${project.id || project._id}" width="400" height="600" frameborder="0"></iframe>`}
+                {`<iframe src="${process.env.REACT_APP_API_URL}/embed/${project.id || project._id}" width="400" height="600" frameborder="0"></iframe>`}
               </code>
             </div>
             <button 
@@ -1271,7 +1271,7 @@ const SettingsPanel = () => (
           </div>
           <div className="setting-item">
             <label>Backend URL</label>
-            <input type="text" value="http://localhost:8080" readOnly />
+            <input type="text" value={process.env.REACT_APP_API_URL} readOnly />
           </div>
           <div className="setting-item">
             <label>Frontend URL</label>

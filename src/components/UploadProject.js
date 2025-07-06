@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, FileText, X, Check, AlertCircle } from 'lucide-react';
-import { adminAPI } from '../utils/api';
 import '../styles/UploadProject.css';
 
 const UploadProject = ({ onProjectCreated }) => {
@@ -16,18 +15,17 @@ const UploadProject = ({ onProjectCreated }) => {
     name: '',
     description: '',
     category: '',
-    gemini_api_key: '',          // Changed from geminiKey
-    gemini_model: 'gemini-1.5-flash',  // Added required field
-    gemini_daily_limit: 1000,        // Changed from gemini_limit
-    gemini_monthly_limit: 3000,      // Add this field
-    gemini_enabled: true,        // Added for backend
-    temperature: 0.7,
-    welcome_message: 'Hello! How can I help you today?'  // Changed from welcomeMessage
+    gemini_api_key: '',
+    gemini_model: 'gemini-1.5-flash',
+    gemini_daily_limit: 100,        // Fixed: Set reasonable default
+    gemini_monthly_limit: 3000,     // Fixed: Set reasonable default
+    gemini_enabled: true,
+    welcome_message: 'Hello! How can I help you today?'
   });
 
   const onDrop = useCallback((acceptedFiles, rejectedFiles) => {
     if (rejectedFiles.length > 0) {
-      setError('Some files were rejected. Please upload PDF, DOC, DOCX, or TXT files only.');
+      setError('Some files were rejected. Please upload PDF files only (max 10MB each).');
       return;
     }
 
@@ -38,51 +36,21 @@ const UploadProject = ({ onProjectCreated }) => {
       size: file.size,
       type: file.type,
       progress: 0,
-      status: 'pending'
+      status: 'ready'
     }));
 
     setUploadedFiles(prev => [...prev, ...newFiles]);
-
-    // Simulate upload progress for UI feedback
-    newFiles.forEach(fileObj => {
-      simulateUpload(fileObj);
-    });
+    setError(''); // Clear any previous errors
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'application/pdf': ['.pdf'],
-      'application/msword': ['.doc'],
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-      'text/plain': ['.txt']
+      'application/pdf': ['.pdf']  // Only accept PDFs to match backend
     },
     maxSize: 10 * 1024 * 1024,
     multiple: true
   });
-
-  const simulateUpload = (fileObj) => {
-    const interval = setInterval(() => {
-      setUploadedFiles(prev =>
-        prev.map(file =>
-          file.id === fileObj.id
-            ? { ...file, progress: Math.min(file.progress + Math.random() * 20, 100) }
-            : file
-        )
-      );
-    }, 200);
-
-    setTimeout(() => {
-      clearInterval(interval);
-      setUploadedFiles(prev =>
-        prev.map(file =>
-          file.id === fileObj.id
-            ? { ...file, progress: 100, status: 'completed' }
-            : file
-        )
-      );
-    }, 3000);
-  };
 
   const removeFile = (fileId) => {
     setUploadedFiles(prev => prev.filter(file => file.id !== fileId));
@@ -96,50 +64,44 @@ const UploadProject = ({ onProjectCreated }) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-const validateStep = (step) => {
-  switch (step) {
-    case 1:
-      if (!projectData.name.trim()) {
-        setError('Project name is required');
-        return false;
-      }
-      if (projectData.name.length < 3) {
-        setError('Project name must be at least 3 characters long');
-        return false;
-      }
-      break;
-    case 2:
-      if (uploadedFiles.length === 0) {
-        setError('Please upload at least one file');
-        return false;
-      }
-      const incompleteFiles = uploadedFiles.filter(file => file.status !== 'completed');
-      if (incompleteFiles.length > 0) {
-        setError('Please wait for all files to finish uploading');
-        return false;
-      }
-      break;
-    case 3:
-      if (!projectData.gemini_api_key.trim()) {
-        setError('Gemini API key is required');
-        return false;
-      }
-      if (projectData.gemini_api_key.length < 20) {
-        setError('Please enter a valid Gemini API key');
-        return false;
-      }
-      if (projectData.gemini_daily_limit <= 0 || projectData.gemini_monthly_limit <= 0) {
-        setError('Usage limits must be greater than 0');
-        return false;
-      }
-      break;
-    default:
-      break;
-  }
-  setError('');
-  return true;
-};
-
+  const validateStep = (step) => {
+    switch (step) {
+      case 1:
+        if (!projectData.name.trim()) {
+          setError('Project name is required');
+          return false;
+        }
+        if (projectData.name.length < 3) {
+          setError('Project name must be at least 3 characters long');
+          return false;
+        }
+        break;
+      case 2:
+        if (uploadedFiles.length === 0) {
+          setError('Please upload at least one PDF file');
+          return false;
+        }
+        break;
+      case 3:
+        if (!projectData.gemini_api_key.trim()) {
+          setError('Gemini API key is required');
+          return false;
+        }
+        if (projectData.gemini_api_key.length < 20) {
+          setError('Please enter a valid Gemini API key');
+          return false;
+        }
+        if (projectData.gemini_daily_limit <= 0 || projectData.gemini_monthly_limit <= 0) {
+          setError('Usage limits must be greater than 0');
+          return false;
+        }
+        break;
+      default:
+        break;
+    }
+    setError('');
+    return true;
+  };
 
   const nextStep = () => {
     if (validateStep(currentStep)) {
@@ -158,79 +120,145 @@ const validateStep = (step) => {
     }
   };
 
-  // Fixed handleSubmit to match backend expectations
- const handleSubmit = async () => {
-  setLoading(true);
-  setError('');
+  // Enhanced file upload with proper error handling
+  const uploadFilesToProject = async (projectId) => {
+    console.log('Starting file upload for project:', projectId);
+    console.log('Files to upload:', uploadedFiles.map(f => f.name));
 
-  try {
-    // Create project first
-    const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/projects`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify(projectData)
-    });
+    try {
+      // Update all files to uploading status
+      setUploadedFiles(prev => 
+        prev.map(file => ({ ...file, status: 'uploading', progress: 0 }))
+      );
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to create project');
-    }
+      for (const fileObj of uploadedFiles) {
+        console.log(`Uploading file: ${fileObj.name}`);
+        
+        const formData = new FormData();
+        formData.append('pdfs', fileObj.file); // Match backend expectation
 
-    const result = await response.json();
+        // Log FormData for debugging
+        console.log('FormData entries:');
+        for (let pair of formData.entries()) {
+          console.log(pair[0], pair[1]);
+        }
 
-    // Upload files if any
-    if (uploadedFiles.length > 0 && result.project && result.project.id) {
-      await uploadFilesToProject(result.project.id);
-    }
+        const uploadUrl = `${process.env.REACT_APP_API_URL}/admin/projects/${projectId}/upload-pdf`;
+        console.log('Upload URL:', uploadUrl);
 
-    setSuccess(`Project "${projectData.name}" created successfully with ${uploadedFiles.length} files uploaded!`);
-    
-    setTimeout(() => {
-      onProjectCreated && onProjectCreated(result.project);
-    }, 2000);
+        const response = await fetch(uploadUrl, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            // Don't set Content-Type for FormData - let browser handle it
+          },
+          body: formData
+        });
 
-  } catch (error) {
-    console.error('Project creation error:', error);
-    setError(error.message || 'Failed to create project. Please try again.');
-  } finally {
-    setLoading(false);
-  }
-};
+        console.log('Upload response status:', response.status);
+        console.log('Upload response headers:', [...response.headers.entries()]);
 
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Upload error response:', errorText);
+          
+          // Update file status to error
+          setUploadedFiles(prev => 
+            prev.map(file => 
+              file.id === fileObj.id 
+                ? { ...file, status: 'error', progress: 0 }
+                : file
+            )
+          );
+          
+          throw new Error(`Failed to upload ${fileObj.name}: ${response.status} ${response.statusText}`);
+        }
 
-  // Separate function to upload files to created project
-const uploadFilesToProject = async (projectId) => {
-  try {
-    for (const fileObj of uploadedFiles) {
-      const formData = new FormData();
-      formData.append('files', fileObj.file); // ✅ Correct field name
+        const result = await response.json();
+        console.log('Upload successful for', fileObj.name, ':', result);
+
+        // Update file status to completed
+        setUploadedFiles(prev => 
+          prev.map(file => 
+            file.id === fileObj.id 
+              ? { ...file, status: 'completed', progress: 100 }
+              : file
+          )
+        );
+      }
+
+      console.log('All files uploaded successfully');
+    } catch (error) {
+      console.error('File upload error:', error);
       
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/projects/${projectId}/upload-pdf`, {
+      // Reset failed files to ready status
+      setUploadedFiles(prev => 
+        prev.map(file => 
+          file.status === 'uploading' 
+            ? { ...file, status: 'error', progress: 0 }
+            : file
+        )
+      );
+      
+      throw error;
+    }
+  };
+
+  // Enhanced project creation with better error handling
+  const handleSubmit = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      console.log('Creating project with data:', projectData);
+
+      // Create project first
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/projects`, {
         method: 'POST',
         credentials: 'include',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: formData
+        body: JSON.stringify(projectData)
       });
-      
+
+      console.log('Project creation response status:', response.status);
+
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.status}`);
+        const errorData = await response.json();
+        console.error('Project creation error:', errorData);
+        throw new Error(errorData.error || 'Failed to create project');
+      }
+
+      const result = await response.json();
+      console.log('Project created successfully:', result);
+
+      // Upload files if any
+      if (uploadedFiles.length > 0 && result.project && result.project.id) {
+        try {
+          await uploadFilesToProject(result.project.id);
+          setSuccess(`Project "${projectData.name}" created successfully with ${uploadedFiles.length} files uploaded!`);
+        } catch (uploadError) {
+          console.error('File upload failed:', uploadError);
+          setSuccess(`Project "${projectData.name}" created successfully, but file upload failed: ${uploadError.message}`);
+        }
+      } else {
+        setSuccess(`Project "${projectData.name}" created successfully!`);
       }
       
-      const result = await response.json();
-      console.log('Upload successful:', result);
-    }
-  } catch (error) {
-    console.error('Upload error:', error);
-    throw error;
-  }
-};
+      setTimeout(() => {
+        onProjectCreated && onProjectCreated(result.project);
+      }, 2000);
 
+    } catch (error) {
+      console.error('Project creation error:', error);
+      setError(error.message || 'Failed to create project. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleInputChange = (field, value) => {
     setProjectData(prev => ({
@@ -332,25 +360,25 @@ const uploadFilesToProject = async (projectId) => {
           <div className="form-step">
             <h3>Upload Training Documents</h3>
             <p>Upload PDF documents to train your AI chatbot</p>
-
-            <div
-              {...getRootProps()}
+            
+            <div 
+              {...getRootProps()} 
               className={`dropzone ${isDragActive ? 'active' : ''}`}
             >
               <input {...getInputProps()} />
               <Upload className="dropzone-icon" />
               <div className="dropzone-text">
-                {isDragActive ? 'Drop files here' : 'Drag & drop files here, or click to browse'}
+                {isDragActive ? 'Drop PDF files here' : 'Drag & drop PDF files here, or click to browse'}
               </div>
               <div className="dropzone-subtext">
-                Supports: PDF, DOC, DOCX, TXT (Max 10MB each)
+                Supports: PDF files only (Max 10MB each)
               </div>
             </div>
 
-            {/* File Preview */}
+            {/* Enhanced File Preview */}
             {uploadedFiles.length > 0 && (
               <div className="file-preview">
-                <h4>Uploaded Files ({uploadedFiles.length})</h4>
+                <h4>Files Ready for Upload ({uploadedFiles.length})</h4>
                 {uploadedFiles.map(file => (
                   <div key={file.id} className="file-item">
                     <div className="file-info">
@@ -358,24 +386,35 @@ const uploadFilesToProject = async (projectId) => {
                       <div className="file-details">
                         <div className="file-name">{file.name}</div>
                         <div className="file-size">{formatFileSize(file.size)}</div>
-                        {file.status === 'pending' && (
+                        {file.status === 'uploading' && (
                           <div className="progress-bar">
-                            <div
-                              className="progress-fill"
+                            <div 
+                              className="progress-fill" 
                               style={{ width: `${file.progress}%` }}
                             />
                           </div>
                         )}
                         {file.status === 'completed' && (
                           <div className="file-status completed">
-                            <Check size={14} /> Ready for Upload
+                            <Check size={14} /> Upload Complete
+                          </div>
+                        )}
+                        {file.status === 'error' && (
+                          <div className="file-status error">
+                            <X size={14} /> Upload Failed
+                          </div>
+                        )}
+                        {file.status === 'ready' && (
+                          <div className="file-status ready">
+                            Ready for Upload
                           </div>
                         )}
                       </div>
                     </div>
-                    <button
+                    <button 
                       onClick={() => removeFile(file.id)}
                       className="remove-file-btn"
+                      disabled={file.status === 'uploading'}
                     >
                       <X size={16} />
                     </button>
@@ -468,7 +507,7 @@ const uploadFilesToProject = async (projectId) => {
               </div>
               <div className="summary-item">
                 <span className="label">Files to Upload:</span>
-                <span className="value">{uploadedFiles.length} files</span>
+                <span className="value">{uploadedFiles.length} PDF files</span>
               </div>
               <div className="summary-item">
                 <span className="label">AI Model:</span>
@@ -476,7 +515,11 @@ const uploadFilesToProject = async (projectId) => {
               </div>
               <div className="summary-item">
                 <span className="label">Daily Limit:</span>
-                <span className="value">{projectData.gemini_limit} requests</span>
+                <span className="value">{projectData.gemini_daily_limit} requests</span>
+              </div>
+              <div className="summary-item">
+                <span className="label">Monthly Limit:</span>
+                <span className="value">{projectData.gemini_monthly_limit} requests</span>
               </div>
               <div className="summary-item">
                 <span className="label">API Key:</span>
@@ -491,14 +534,14 @@ const uploadFilesToProject = async (projectId) => {
 
       {/* Navigation */}
       <div className="form-navigation">
-        <button
+        <button 
           onClick={prevStep}
           disabled={currentStep === 1}
           className="nav-btn prev"
         >
           Previous
         </button>
-        <button
+        <button 
           onClick={nextStep}
           disabled={loading}
           className="nav-btn next"

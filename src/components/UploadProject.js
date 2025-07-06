@@ -207,9 +207,8 @@ const uploadFilesToProject = async (projectId) => {
   try {
     for (const fileObj of uploadedFiles) {
       const formData = new FormData();
-      // ✅ Change from 'files' to 'pdfs' to match backend
-      formData.append('pdfs', fileObj.file);
-
+      formData.append('files', fileObj.file); // ✅ Correct field name
+      
       const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/projects/${projectId}/upload-pdf`, {
         method: 'POST',
         credentials: 'include',
@@ -218,21 +217,19 @@ const uploadFilesToProject = async (projectId) => {
         },
         body: formData
       });
-
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
+        throw new Error(`Upload failed: ${response.status}`);
       }
-
+      
       const result = await response.json();
       console.log('Upload successful:', result);
     }
   } catch (error) {
-    console.error('File upload error:', error);
+    console.error('Upload error:', error);
     throw error;
   }
 };
-
 
 
   const handleInputChange = (field, value) => {

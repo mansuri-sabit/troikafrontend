@@ -18,7 +18,8 @@ const UploadProject = ({ onProjectCreated }) => {
     category: '',
     gemini_api_key: '',          // Changed from geminiKey
     gemini_model: 'gemini-1.5-flash',  // Added required field
-    gemini_limit: 1000,          // Changed from maxTokens
+    gemini_daily_limit: 1000,        // Changed from gemini_limit
+    gemini_monthly_limit: 3000,      // Add this field
     gemini_enabled: true,        // Added for backend
     temperature: 0.7,
     welcome_message: 'Hello! How can I help you today?'  // Changed from welcomeMessage
@@ -41,7 +42,7 @@ const UploadProject = ({ onProjectCreated }) => {
     }));
 
     setUploadedFiles(prev => [...prev, ...newFiles]);
-    
+
     // Simulate upload progress for UI feedback
     newFiles.forEach(fileObj => {
       simulateUpload(fileObj);
@@ -62,9 +63,9 @@ const UploadProject = ({ onProjectCreated }) => {
 
   const simulateUpload = (fileObj) => {
     const interval = setInterval(() => {
-      setUploadedFiles(prev => 
-        prev.map(file => 
-          file.id === fileObj.id 
+      setUploadedFiles(prev =>
+        prev.map(file =>
+          file.id === fileObj.id
             ? { ...file, progress: Math.min(file.progress + Math.random() * 20, 100) }
             : file
         )
@@ -73,9 +74,9 @@ const UploadProject = ({ onProjectCreated }) => {
 
     setTimeout(() => {
       clearInterval(interval);
-      setUploadedFiles(prev => 
-        prev.map(file => 
-          file.id === fileObj.id 
+      setUploadedFiles(prev =>
+        prev.map(file =>
+          file.id === fileObj.id
             ? { ...file, progress: 100, status: 'completed' }
             : file
         )
@@ -95,37 +96,50 @@ const UploadProject = ({ onProjectCreated }) => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const validateStep = (step) => {
-    switch (step) {
-      case 1:
-        if (!projectData.name.trim()) {
-          setError('Project name is required');
-          return false;
-        }
-        break;
-      case 2:
-        if (uploadedFiles.length === 0) {
-          setError('Please upload at least one file');
-          return false;
-        }
-        const incompleteFiles = uploadedFiles.filter(file => file.status !== 'completed');
-        if (incompleteFiles.length > 0) {
-          setError('Please wait for all files to finish uploading');
-          return false;
-        }
-        break;
-      case 3:
-        if (!projectData.gemini_api_key.trim()) {
-          setError('Gemini API key is required');
-          return false;
-        }
-        break;
-      default:
-        break;
-    }
-    setError('');
-    return true;
-  };
+const validateStep = (step) => {
+  switch (step) {
+    case 1:
+      if (!projectData.name.trim()) {
+        setError('Project name is required');
+        return false;
+      }
+      if (projectData.name.length < 3) {
+        setError('Project name must be at least 3 characters long');
+        return false;
+      }
+      break;
+    case 2:
+      if (uploadedFiles.length === 0) {
+        setError('Please upload at least one file');
+        return false;
+      }
+      const incompleteFiles = uploadedFiles.filter(file => file.status !== 'completed');
+      if (incompleteFiles.length > 0) {
+        setError('Please wait for all files to finish uploading');
+        return false;
+      }
+      break;
+    case 3:
+      if (!projectData.gemini_api_key.trim()) {
+        setError('Gemini API key is required');
+        return false;
+      }
+      if (projectData.gemini_api_key.length < 20) {
+        setError('Please enter a valid Gemini API key');
+        return false;
+      }
+      if (projectData.gemini_daily_limit <= 0 || projectData.gemini_monthly_limit <= 0) {
+        setError('Usage limits must be greater than 0');
+        return false;
+      }
+      break;
+    default:
+      break;
+  }
+  setError('');
+  return true;
+};
+
 
   const nextStep = () => {
     if (validateStep(currentStep)) {
@@ -145,61 +159,61 @@ const UploadProject = ({ onProjectCreated }) => {
   };
 
   // Fixed handleSubmit to match backend expectations
-  const handleSubmit = async () => {
-    setLoading(true);
-    setError('');
+ const handleSubmit = async () => {
+  setLoading(true);
+  setError('');
 
-    try {
-      console.log('Creating project with data:', projectData);
+  try {
+    // Create project first
+    const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/projects`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify(projectData)
+    });
 
-      // Create project first
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/projects`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(projectData)
-      });
-
-      console.log('Response status:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create project');
-      }
-
-      const result = await response.json();
-      console.log('Project created successfully:', result);
-
-      // If files are uploaded, process them separately
-      if (uploadedFiles.length > 0 && result.project && result.project.id) {
-        await uploadFilesToProject(result.project.id);
-      }
-
-      setSuccess('Project created successfully!');
-      
-      setTimeout(() => {
-        onProjectCreated && onProjectCreated(result.project);
-      }, 2000);
-
-    } catch (error) {
-      console.error('Project creation error:', error);
-      setError(error.message || 'Failed to create project. Please try again.');
-    } finally {
-      setLoading(false);
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to create project');
     }
-  };
+
+    const result = await response.json();
+
+    // Upload files if any
+    if (uploadedFiles.length > 0 && result.project && result.project.id) {
+      await uploadFilesToProject(result.project.id);
+    }
+
+    setSuccess(`Project "${projectData.name}" created successfully with ${uploadedFiles.length} files uploaded!`);
+    
+    setTimeout(() => {
+      onProjectCreated && onProjectCreated(result.project);
+    }, 2000);
+
+  } catch (error) {
+    console.error('Project creation error:', error);
+    setError(error.message || 'Failed to create project. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // Separate function to upload files to created project
   const uploadFilesToProject = async (projectId) => {
     try {
+      setUploadedFiles(prev =>
+        prev.map(file => ({ ...file, status: 'uploading', progress: 0 }))
+      );
+
       for (const fileObj of uploadedFiles) {
         const formData = new FormData();
-        formData.append('pdfs', fileObj.file);
+        formData.append('files', fileObj.file); // Changed from 'pdfs' to 'files'
 
-        await fetch(`${process.env.REACT_APP_API_URL}/admin/projects/${projectId}/upload-pdf`, {
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/projects/${projectId}/upload-pdf`, {
           method: 'POST',
           credentials: 'include',
           headers: {
@@ -207,12 +221,27 @@ const UploadProject = ({ onProjectCreated }) => {
           },
           body: formData
         });
+
+        if (!response.ok) {
+          throw new Error(`Failed to upload ${fileObj.name}`);
+        }
+
+        // Update file status to completed
+        setUploadedFiles(prev =>
+          prev.map(file =>
+            file.id === fileObj.id
+              ? { ...file, status: 'completed', progress: 100 }
+              : file
+          )
+        );
       }
     } catch (error) {
       console.error('File upload error:', error);
-      // Don't throw error here as project was already created
+      setError(`File upload failed: ${error.message}`);
+      throw error; // Re-throw to handle in main submit
     }
   };
+
 
   const handleInputChange = (field, value) => {
     setProjectData(prev => ({
@@ -234,8 +263,8 @@ const UploadProject = ({ onProjectCreated }) => {
       {/* Progress Steps */}
       <div className="progress-steps">
         {[1, 2, 3, 4].map(step => (
-          <div 
-            key={step} 
+          <div
+            key={step}
             className={`step ${currentStep >= step ? 'active' : ''} ${currentStep > step ? 'completed' : ''}`}
           >
             <div className="step-number">
@@ -314,9 +343,9 @@ const UploadProject = ({ onProjectCreated }) => {
           <div className="form-step">
             <h3>Upload Training Documents</h3>
             <p>Upload PDF documents to train your AI chatbot</p>
-            
-            <div 
-              {...getRootProps()} 
+
+            <div
+              {...getRootProps()}
               className={`dropzone ${isDragActive ? 'active' : ''}`}
             >
               <input {...getInputProps()} />
@@ -342,8 +371,8 @@ const UploadProject = ({ onProjectCreated }) => {
                         <div className="file-size">{formatFileSize(file.size)}</div>
                         {file.status === 'pending' && (
                           <div className="progress-bar">
-                            <div 
-                              className="progress-fill" 
+                            <div
+                              className="progress-fill"
                               style={{ width: `${file.progress}%` }}
                             />
                           </div>
@@ -355,7 +384,7 @@ const UploadProject = ({ onProjectCreated }) => {
                         )}
                       </div>
                     </div>
-                    <button 
+                    <button
                       onClick={() => removeFile(file.id)}
                       className="remove-file-btn"
                     >
@@ -397,13 +426,26 @@ const UploadProject = ({ onProjectCreated }) => {
             <div className="form-group">
               <label>Daily Usage Limit</label>
               <select
-                value={projectData.gemini_limit}
-                onChange={(e) => handleInputChange('gemini_limit', parseInt(e.target.value))}
+                value={projectData.gemini_daily_limit}
+                onChange={(e) => handleInputChange('gemini_daily_limit', parseInt(e.target.value))}
               >
+                <option value={100}>100 requests/day</option>
                 <option value={500}>500 requests/day</option>
                 <option value={1000}>1000 requests/day</option>
                 <option value={2000}>2000 requests/day</option>
                 <option value={5000}>5000 requests/day</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Monthly Usage Limit</label>
+              <select
+                value={projectData.gemini_monthly_limit}
+                onChange={(e) => handleInputChange('gemini_monthly_limit', parseInt(e.target.value))}
+              >
+                <option value={3000}>3000 requests/month</option>
+                <option value={15000}>15000 requests/month</option>
+                <option value={30000}>30000 requests/month</option>
+                <option value={60000}>60000 requests/month</option>
               </select>
             </div>
             <div className="form-group">
@@ -460,14 +502,14 @@ const UploadProject = ({ onProjectCreated }) => {
 
       {/* Navigation */}
       <div className="form-navigation">
-        <button 
+        <button
           onClick={prevStep}
           disabled={currentStep === 1}
           className="nav-btn prev"
         >
           Previous
         </button>
-        <button 
+        <button
           onClick={nextStep}
           disabled={loading}
           className="nav-btn next"

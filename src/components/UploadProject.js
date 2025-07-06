@@ -205,56 +205,30 @@ const validateStep = (step) => {
   // Separate function to upload files to created project
 const uploadFilesToProject = async (projectId) => {
   try {
-    setUploadedFiles(prev => 
-      prev.map(file => ({ ...file, status: 'uploading', progress: 0 }))
-    );
-
     for (const fileObj of uploadedFiles) {
       const formData = new FormData();
-      // Use 'files' to match your backend handler
-      formData.append('files', fileObj.file);
-
-      console.log('Uploading file:', fileObj.name, 'to project:', projectId);
+      // ✅ Change from 'files' to 'pdfs' to match backend
+      formData.append('pdfs', fileObj.file);
 
       const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/projects/${projectId}/upload-pdf`, {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
-          // Don't set Content-Type for FormData - let browser set it
         },
         body: formData
       });
 
-      console.log('Upload response status:', response.status);
-
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Upload error response:', errorText);
-        throw new Error(`Failed to upload ${fileObj.name}: ${response.status} ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
       }
 
       const result = await response.json();
-      console.log('Upload success:', result);
-
-      // Update file status to completed
-      setUploadedFiles(prev => 
-        prev.map(file => 
-          file.id === fileObj.id 
-            ? { ...file, status: 'completed', progress: 100 }
-            : file
-        )
-      );
+      console.log('Upload successful:', result);
     }
   } catch (error) {
     console.error('File upload error:', error);
-    setError(`File upload failed: ${error.message}`);
-    
-    // Reset file status on error
-    setUploadedFiles(prev => 
-      prev.map(file => ({ ...file, status: 'error', progress: 0 }))
-    );
-    
     throw error;
   }
 };
